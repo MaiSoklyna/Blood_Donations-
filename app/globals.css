@@ -1,26 +1,69 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply antialiased;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  .container {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center px-6 py-3 bg-red-600 text-white font-semibold rounded-lg transition-all hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center px-6 py-3 bg-white text-gray-700 font-semibold rounded-lg border-2 border-gray-300 transition-all hover:bg-gray-50;
+  }
+  .btn-large {
+    @apply px-8 py-4 text-lg;
+  }
+  .card {
+    @apply bg-white rounded-xl shadow-sm p-6 transition-all hover:shadow-md;
+  }
+  .input-field {
+    @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500;
+  }
+  .label {
+    @apply block font-medium text-gray-700 mb-2;
+  }
+  .page-header {
+    @apply bg-gradient-to-r from-red-50 to-blue-50 py-16 md:py-20 text-center;
+  }
+  .page-title {
+    @apply text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-4;
+  }
+  .page-subtitle {
+    @apply text-lg md:text-xl text-gray-600;
+  }
+  .section-title {
+    @apply text-2xl md:text-3xl font-bold text-gray-900 text-center mb-8;
+  }
+  .metric-card {
+    @apply bg-white p-6 rounded-xl shadow-sm;
+  }
+  .metric-value {
+    @apply text-3xl md:text-4xl font-bold text-red-600 mb-2;
+  }
+  .metric-label {
+    @apply text-gray-500 text-sm;
+  }
+  .tab {
+    @apply px-6 py-3 bg-white border-2 border-gray-300 rounded-lg cursor-pointer font-medium text-gray-700 transition-all hover:border-red-500;
+  }
+  .tab.active {
+    @apply bg-red-600 text-white border-red-600;
+  }
+  .progress-bar {
+    @apply h-2 bg-gray-200 rounded-full overflow-hidden;
+  }
+  .progress-fill {
+    @apply h-full bg-red-600 rounded-full;
+  }
 }
