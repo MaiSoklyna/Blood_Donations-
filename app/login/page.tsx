@@ -5,6 +5,12 @@ import Link from 'next/link';
 import { signInWithGoogle } from '@/lib/firebase';
 import { authApi } from '@/lib/api';
 
+// 👇 ADD YOUR ADMIN EMAILS HERE
+const ADMIN_EMAILS = [
+  'nadrayoky000@gmail.com',     // Your email from earlier screenshot
+  'admin@bloodconnect.kh',
+];
+
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -12,25 +18,17 @@ export default function LoginPage() {
   const [pageReady, setPageReady] = useState(false);
 
   useEffect(() => {
-    // Only run once on mount
     const token = localStorage.getItem('app_token');
     const userData = localStorage.getItem('user_data');
     
     console.log('🔍 Login page - token:', !!token, 'userData:', !!userData);
     
     if (token && userData) {
-      // Already logged in - go to dashboard
       window.location.replace('/dashboard');
     } else {
-      // Not logged in - show login form
       setPageReady(true);
     }
   }, []);
-  const ADMIN_EMAILS = [
-       // Your email
-  'nadrayoky000@gmail.com',     // Admin email
-  // Add more admin emails here
-  ];
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -43,6 +41,10 @@ export default function LoginPage() {
       
       setStatus('Connecting to server...');
       
+      // Check if user is admin based on email
+      const isAdmin = ADMIN_EMAILS.includes(firebaseUser.email || '');
+      console.log('👤 Is admin:', isAdmin);
+      
       // Try backend auth (with 5s timeout)
       try {
         const timeoutPromise = new Promise((_, reject) => 
@@ -52,12 +54,19 @@ export default function LoginPage() {
         const response = await Promise.race([
           authApi.login(idToken),
           timeoutPromise
-        ]) as { success?: boolean; token?: string; user?: object };
+        ]) as { success?: boolean; token?: string; user?: { full_name?: string; blood_type?: string; role?: string } };
         
         if (response?.success && response?.token && response?.user) {
           console.log('✅ Backend auth success');
+          
+          // Override role if email is in admin list
+          const user = {
+            ...response.user,
+            role: isAdmin ? 'admin' : (response.user.role || 'user'),
+          };
+          
           localStorage.setItem('app_token', response.token);
-          localStorage.setItem('user_data', JSON.stringify(response.user));
+          localStorage.setItem('user_data', JSON.stringify(user));
           window.location.replace('/dashboard');
           return;
         }
@@ -68,21 +77,19 @@ export default function LoginPage() {
       // Fallback: local auth
       setStatus('Setting up your account...');
       
-      
       const localUser = {
-       id: firebaseUser.uid,
-       email: firebaseUser.email || '',
-       role: ADMIN_EMAILS.includes(firebaseUser.email || '') ? 'admin' : 'user',  // Auto-assign admin
-       is_verified: firebaseUser.emailVerified,
-       full_name: firebaseUser.displayName || '',
-       };
+        id: firebaseUser.uid,
+        email: firebaseUser.email || '',
+        role: isAdmin ? 'admin' : 'user',  // 👈 Assign role based on email
+        is_verified: firebaseUser.emailVerified,
+        full_name: firebaseUser.displayName || '',
+      };
       
       localStorage.setItem('app_token', idToken);
       localStorage.setItem('user_data', JSON.stringify(localUser));
       
-      console.log('✅ Local auth saved');
+      console.log('✅ Local auth saved, role:', localUser.role);
       
-      // Check if profile is complete
       if (localUser.full_name) {
         window.location.replace('/dashboard');
       } else {
