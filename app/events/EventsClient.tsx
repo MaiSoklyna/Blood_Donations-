@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import Header from '@/components/layout/Header';
+
 import { eventsApi } from '@/lib/api';
 
 interface Event {
@@ -87,8 +87,7 @@ export default function EventsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
-
+     
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-red-600 to-red-700 text-white py-12 px-4">
         <div className="max-w-6xl mx-auto">

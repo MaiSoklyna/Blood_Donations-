@@ -7,8 +7,8 @@ import { authApi } from '@/lib/api';
 
 // 👇 ADD YOUR ADMIN EMAILS HERE
 const ADMIN_EMAILS = [
-  'nadrayoky000@gmail.com',     // Your email from earlier screenshot
-  'admin@bloodconnect.kh',
+  'nadrayoky001@gmail.com',     // Your email from earlier screenshot
+  'nadrayoky000@gmail.com',
 ];
 
 export default function LoginPage() {
