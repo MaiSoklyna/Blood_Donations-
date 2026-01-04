@@ -1,46 +1,73 @@
 'use client';
 
+
 import { useEffect, useState } from 'react';
-import { bloodMarketApi } from './../../../lib/api';
+import { getAuth } from 'firebase/auth';
 
 export default function AdminBloodRequestsPage() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
+  const [error, setError] = useState(null);
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://borejak-backend.vercel.app';
 
   useEffect(() => {
     fetchRequests();
   }, []);
 
   const fetchRequests = async () => {
+    setLoading(true);
     try {
-      const response = await bloodMarketApi.getAll();
-      setRequests(response.data || []);
-    } catch (error) {
-      console.error('Failed to fetch blood requests:', error);
-    } finally {
-      setLoading(false);
+      const response = await fetch(`${API_URL}/api/blood-market`);
+      if (response.ok) {
+        const result = await response.json();
+        const data = result.data || result || [];
+        setRequests(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Fetch error:', err);
+      setError('Failed to load blood requests');
     }
+    setLoading(false);
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this request?')) return;
+    if (!confirm('Delete this listing?')) return;
 
     try {
-      await bloodMarketApi.delete(id);
-      alert('Request deleted!');
-      fetchRequests();
-    } catch (error) {
-      console.error('Failed to delete:', error);
-      alert('Failed to delete request.');
+      const auth = getAuth();
+      const user = auth.currentUser;
+      let token = localStorage.getItem('app_token');
+      
+      if (user) {
+        const firebaseToken = await user.getIdToken(true);
+        const loginRes = await fetch(`${API_URL}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ firebaseToken }),
+        });
+        if (loginRes.ok) {
+          const data = await loginRes.json();
+          token = data.token;
+          localStorage.setItem('app_token', token);
+        }
+      }
+
+      const response = await fetch(`${API_URL}/api/blood-market/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        alert('✅ Listing deleted!');
+        fetchRequests();
+      } else {
+        alert('❌ Failed to delete');
+      }
+    } catch (err) {
+      alert('❌ Error: ' + err.message);
     }
   };
-
-  const filteredRequests = requests.filter(r => {
-    if (filter === 'request') return r.type === 'request';
-    if (filter === 'offer') return r.type === 'offer';
-    return true;
-  });
 
   const getUrgencyColor = (urgency) => {
     switch (urgency) {
@@ -50,118 +77,82 @@ export default function AdminBloodRequestsPage() {
     }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'open': return 'bg-green-100 text-green-700';
-      case 'fulfilled': return 'bg-gray-100 text-gray-700';
-      case 'expired': return 'bg-red-100 text-red-700';
-      default: return 'bg-gray-100 text-gray-700';
-    }
+  const getTypeColor = (type) => {
+    return type === 'request' ? 'bg-red-500 text-white' : 'bg-green-500 text-white';
   };
 
   return (
-    <div className="p-6 md:p-8">
-      <div className="flex justify-between items-center mb-8">
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Blood Requests</h1>
-          <p className="text-gray-500 mt-1">Manage blood donation requests and offers</p>
+          <h1 className="text-2xl font-bold">Blood Market</h1>
+          <p className="text-gray-500">Manage blood requests and offers</p>
+        </div>
+        <div className="text-right">
+          <p className="text-3xl font-bold text-red-600">{requests.length}</p>
+          <p className="text-sm text-gray-500">Total Listings</p>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
-        <div className="bg-white rounded-xl p-4 shadow-sm">
-          <p className="text-3xl font-bold text-red-600">{requests.filter(r => r.type === 'request').length}</p>
-          <p className="text-gray-500 text-sm">Blood Requests</p>
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <p className="text-red-700">{error}</p>
         </div>
-        <div className="bg-white rounded-xl p-4 shadow-sm">
-          <p className="text-3xl font-bold text-green-600">{requests.filter(r => r.type === 'offer').length}</p>
-          <p className="text-gray-500 text-sm">Blood Offers</p>
-        </div>
-        <div className="bg-white rounded-xl p-4 shadow-sm">
-          <p className="text-3xl font-bold text-orange-600">{requests.filter(r => r.urgency === 'critical').length}</p>
-          <p className="text-gray-500 text-sm">Critical</p>
-        </div>
-      </div>
+      )}
 
-      {/* Filter Tabs */}
-      <div className="flex gap-2 mb-6">
-        {['all', 'request', 'offer'].map((type) => (
-          <button
-            key={type}
-            onClick={() => setFilter(type)}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              filter === type
-                ? 'bg-red-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            {type === 'all' ? 'All' : type === 'request' ? 'Requests' : 'Offers'}
-          </button>
-        ))}
-      </div>
+      {loading ? (
+        <div className="text-center py-8">
+          <div className="w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        </div>
+      ) : requests.length === 0 ? (
+        <div className="text-center py-8 bg-white rounded-xl shadow-sm">
+          <span className="text-4xl block mb-4">🩸</span>
+          <p className="text-gray-500">No blood listings found</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {requests.map((item) => (
+            <div key={item.id} className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <div className="p-4">
+                <div className="flex justify-between items-start mb-3">
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${getTypeColor(item.type)}`}>
+                    {item.type === 'request' ? '🩸 Need' : '💉 Offer'}
+                  </span>
+                  <span className={`px-2 py-1 rounded-full text-xs ${getUrgencyColor(item.urgency)}`}>
+                    {item.urgency}
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                    <span className="text-lg font-bold text-red-600">{item.blood_type}</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">{item.users?.full_name || 'Anonymous'}</p>
+                    <p className="text-sm text-gray-500">{item.location}</p>
+                  </div>
+                </div>
 
-      {/* Requests Table */}
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center">
-            <div className="w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          </div>
-        ) : filteredRequests.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            No blood requests found
-          </div>
-        ) : (
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Blood Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Location</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Urgency</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {filteredRequests.map((request) => (
-                <tr key={request.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      request.type === 'request' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                    }`}>
-                      {request.type === 'request' ? '🩸 Need' : '💉 Offer'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="font-bold text-red-600 text-lg">{request.blood_type}</span>
-                    <span className="text-gray-500 text-sm ml-2">({request.quantity_ml}ml)</span>
-                  </td>
-                  <td className="px-6 py-4 text-gray-500 hidden md:table-cell">{request.location}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-1 text-xs rounded-full ${getUrgencyColor(request.urgency)}`}>
-                      {request.urgency}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(request.status)}`}>
-                      {request.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={() => handleDelete(request.id)}
-                      className="text-red-600 hover:underline text-sm"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+                <p className="text-sm text-gray-600 mb-3">{item.description}</p>
+
+                <div className="flex justify-between items-center text-sm text-gray-500">
+                  <span>{item.quantity_ml} ml</span>
+                  <span>{item.status}</span>
+                </div>
+              </div>
+              
+              <div className="px-4 py-3 bg-gray-50 flex justify-end">
+                <button
+                  onClick={() => handleDelete(item.id)}
+                  className="text-red-600 text-sm hover:underline"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

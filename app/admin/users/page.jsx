@@ -1,147 +1,172 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { getAuth } from 'firebase/auth';
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [error, setError] = useState(null);
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://borejak-backend.vercel.app';
 
   useEffect(() => {
-    // TODO: Fetch from API when endpoint is available
-    const currentUser = localStorage.getItem('user_data');
-    if (currentUser) {
-      const user = JSON.parse(currentUser);
-      setUsers([{
-        id: user.id || '1',
-        email: user.email,
-        full_name: user.full_name || 'Unknown',
-        role: user.role || 'user',
-        blood_type: user.blood_type,
-        is_verified: user.is_verified || false,
-      }]);
-    }
-    setLoading(false);
+    fetchUsers();
   }, []);
 
-  const handleRoleChange = (userId, newRole) => {
-    setUsers(users.map(user =>
-      user.id === userId ? { ...user, role: newRole } : user
-    ));
-    alert(`User role updated to ${newRole}!`);
+  const getFreshToken = async () => {
+    try {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) return localStorage.getItem('app_token');
+      
+      const firebaseToken = await user.getIdToken(true);
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ firebaseToken }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.token) {
+          localStorage.setItem('app_token', data.token);
+          return data.token;
+        }
+      }
+      return localStorage.getItem('app_token');
+    } catch {
+      return localStorage.getItem('app_token');
+    }
   };
 
-  const filteredUsers = users.filter(user =>
-    user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.full_name?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const fetchUsers = async () => {
+    setLoading(true);
+    try {
+      const token = await getFreshToken();
+      const response = await fetch(`${API_URL}/api/users`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const data = result.data || result || [];
+        setUsers(Array.isArray(data) ? data : []);
+      } else if (response.status === 401) {
+        setError('Unauthorized - Need admin role in database');
+      } else if (response.status === 403) {
+        setError('Forbidden - Admin access required');
+      }
+    } catch (err) {
+      console.error('Fetch error:', err);
+      setError('Failed to load users');
+    }
+    setLoading(false);
+  };
+
+  const handleUpdateRole = async (userId, newRole) => {
+    try {
+      const token = await getFreshToken();
+      const response = await fetch(`${API_URL}/api/users/${userId}/role`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ role: newRole }),
+      });
+
+      if (response.ok) {
+        alert('✅ Role updated!');
+        fetchUsers();
+      } else {
+        alert('❌ Failed to update role');
+      }
+    } catch (err) {
+      alert('❌ Error: ' + err.message);
+    }
+  };
 
   return (
-    <div className="p-6 md:p-8">
-      <div className="mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Manage Users</h1>
-        <p className="text-gray-500 mt-1">View and manage user accounts</p>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
-        <div className="bg-white rounded-xl p-4 shadow-sm">
-          <p className="text-3xl font-bold text-gray-900">{users.length}</p>
-          <p className="text-gray-500 text-sm">Total Users</p>
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-2xl font-bold">Manage Users</h1>
+          <p className="text-gray-500">View and manage user accounts</p>
         </div>
-        <div className="bg-white rounded-xl p-4 shadow-sm">
-          <p className="text-3xl font-bold text-red-600">{users.filter(u => u.role === 'admin').length}</p>
-          <p className="text-gray-500 text-sm">Admins</p>
-        </div>
-        <div className="bg-white rounded-xl p-4 shadow-sm">
-          <p className="text-3xl font-bold text-blue-600">{users.filter(u => u.role === 'user').length}</p>
-          <p className="text-gray-500 text-sm">Regular Users</p>
+        <div className="text-right">
+          <p className="text-3xl font-bold text-red-600">{users.length}</p>
+          <p className="text-sm text-gray-500">Total Users</p>
         </div>
       </div>
 
-      {/* Search */}
-      <div className="bg-white rounded-xl shadow-sm mb-6">
-        <div className="p-4 border-b">
-          <input
-            type="text"
-            placeholder="Search by name or email..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
-          />
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <p className="text-red-700">{error}</p>
+          <p className="text-sm text-red-500 mt-2">
+            Ask backend developer to set your role to admin in the database.
+          </p>
         </div>
+      )}
 
-        {/* Users Table */}
-        {loading ? (
-          <div className="p-8 text-center">
-            <div className="w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          </div>
-        ) : filteredUsers.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            No users found
-          </div>
-        ) : (
+      {loading ? (
+        <div className="text-center py-8">
+          <div className="w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        </div>
+      ) : users.length === 0 ? (
+        <div className="text-center py-8 bg-white rounded-xl shadow-sm">
+          <span className="text-4xl block mb-4">👥</span>
+          <p className="text-gray-500">No users found or access denied</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Blood Type</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Blood Type</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredUsers.map((user) => (
+              {users.map((user) => (
                 <tr key={user.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center text-red-600 font-semibold">
-                        {user.full_name?.charAt(0)?.toUpperCase() || '?'}
-                      </div>
-                      <div>
-                        <div className="font-medium text-gray-900">{user.full_name}</div>
-                        <div className="text-sm text-gray-500">{user.email}</div>
-                      </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{user.full_name || 'N/A'}</p>
+                      <p className="text-sm text-gray-500">{user.email}</p>
+                      <p className="text-xs text-gray-400">{user.phone_number}</p>
                     </div>
                   </td>
-                  <td className="px-6 py-4 hidden md:table-cell">
-                    <span className="text-red-600 font-medium">{user.blood_type || '-'}</span>
+                  <td className="px-6 py-4">
+                    <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-sm font-medium">
+                      {user.blood_type || '-'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      user.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'
+                    }`}>
+                      {user.role || 'user'}
+                    </span>
                   </td>
                   <td className="px-6 py-4">
                     <select
-                      value={user.role}
-                      onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                      className={`px-3 py-1 rounded-full text-sm font-medium border-0 cursor-pointer ${
-                        user.role === 'admin'
-                          ? 'bg-red-100 text-red-700'
-                          : 'bg-blue-100 text-blue-700'
-                      }`}
+                      value={user.role || 'user'}
+                      onChange={(e) => handleUpdateRole(user.id, e.target.value)}
+                      className="text-sm border rounded px-2 py-1"
                     >
                       <option value="user">User</option>
                       <option value="admin">Admin</option>
                     </select>
                   </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      user.is_verified ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
-                    }`}>
-                      {user.is_verified ? 'Verified' : 'Pending'}
-                    </span>
-                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
-      </div>
-
-      {/* Info */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-        <h3 className="font-semibold text-blue-900 mb-2">ℹ️ Note</h3>
-        <p className="text-sm text-blue-700">
-          User management requires a backend API endpoint. Currently showing logged-in user only.
-        </p>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
